@@ -1,6 +1,8 @@
 package ohm.softa.a08.controller;
 
 import com.google.gson.Gson;
+import filtering.MealsFilter;
+import filtering.MealsFilterFactory;
 import ohm.softa.a08.api.OpenMensaAPI;
 import ohm.softa.a08.model.Meal;
 import javafx.application.Platform;
@@ -11,6 +13,7 @@ import javafx.fxml.Initializable;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.ListView;
+import ohm.softa.a08.services.OpenMensaAPIService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import retrofit2.Call;
@@ -71,17 +74,12 @@ public class MainController implements Initializable {
 	 * Default constructor
 	 */
 	public MainController() {
-		meals = FXCollections.observableArrayList();
 		gson = new Gson();
+		meals = FXCollections.observableArrayList();
+		var openMensaAPIService = OpenMensaAPIService.getInstance();
+		api = openMensaAPIService.getApi();
 
-		/* initialize Retrofit instance */
-		var retrofit = new Retrofit.Builder()
-			.addConverterFactory(GsonConverterFactory.create(gson))
-			.baseUrl("http://openmensa.org/api/v2/")
-			.build();
 
-		/* create OpenMensaAPI instance */
-		api = retrofit.create(OpenMensaAPI.class);
 	}
 
 	/**
@@ -112,22 +110,26 @@ public class MainController implements Initializable {
 					if (!response.isSuccessful() || response.body() == null) {
 						logger.error(String.format("Got response with not successfull code %d", response.code()));
 
-							var alert = new Alert(Alert.AlertType.ERROR);
-							alert.setHeaderText("Unsuccessful HTTP call");
-							alert.setContentText("Failed to get meals from OpenMensaAPI");
-							alert.show();
+						var alert = new Alert(Alert.AlertType.ERROR);
+						alert.setHeaderText("Unsuccessful HTTP call");
+						alert.setContentText("Failed to get meals from OpenMensaAPI");
+						alert.show();
 
 						return;
 					}
 
 					meals.clear();
+					List<Meal> tmp = new ArrayList<>(response.body());
+					String key = filterChoiceBox.getValue();
+					MealsFilter filter = new MealsFilterFactory().getStrategy(key);
 
-					if ("Vegetarian".equals(filterChoiceBox.getValue()))
-						meals.addAll(response.body().stream()
-							.filter(Meal::isVegetarian)
-							.collect(Collectors.toList()));
-					else
-						meals.addAll(response.body());
+					meals.addAll(FXCollections.observableArrayList(filter.filter(tmp)));
+//					if ("Vegetarian".equals(filterChoiceBox.getValue()))
+//						meals.addAll(response.body().stream()
+//							.filter(Meal::isVegetarian)
+//							.collect(Collectors.toList()));
+//					else
+//						meals.addAll(response.body());
 				});
 			}
 
